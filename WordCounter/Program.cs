@@ -4,6 +4,7 @@ using System.Text;
 using System.Linq;
 using System.Reflection;
 using ClassLibrary;
+using System.Diagnostics;
 
 namespace WordCounter
 {
@@ -11,31 +12,87 @@ namespace WordCounter
     {
         static void Main(string[] args)
         {
-            Count(@"D:\WarAndPeace.txt");
+            Console.WriteLine("Program started!");
+
+            Count(@"D:\FullWarAndPeace.txt", true);
+            //Tests(@"D:\WarAndPeace.txt", 5);
+
+            Console.WriteLine("Program complete!");
         }
 
-        static void Count(string path)
+        static void Count(string path, bool async = false)
         {
-            Console.WriteLine("Program started!");
             string text = "";
             if (!Read(path, ref text))
                 return;
+            Dictionary<string, int> words;
+            Stopwatch stopwatch = new Stopwatch();
 
-            MethodInfo mi = typeof(Counter).GetMethod("Parse", BindingFlags.Static | BindingFlags.NonPublic);
-            if (mi == null)
+            if (async)
             {
-                Console.WriteLine("Method not found.");
-                return;
+                stopwatch.Start();
+                words = Counter.AsyncParse(text, 3);
+                stopwatch.Stop();
             }
-            Dictionary<string, int> words = (Dictionary<string, int>)mi.Invoke(null, new object[] { text });
+            else
+            {
+                MethodInfo mi = typeof(Counter).GetMethod("Parse", BindingFlags.Static | BindingFlags.NonPublic);
+                stopwatch.Start();
+                words = (Dictionary<string, int>)mi.Invoke(null, new object[] { text });
+                stopwatch.Stop();
+            }
 
+            Console.WriteLine($"Elapsed execution method time: {stopwatch.Elapsed.TotalMilliseconds} milliseconds.");
             StringBuilder result = new StringBuilder();
             result.Append($"{"Count",7}|Word");
 
             foreach (var i in words.OrderByDescending(x => x.Value))
                 result.Append($"\n{i.Value,7}|{i.Key,-23}");
             Write("Reuslt.txt", result.ToString());
-            Console.WriteLine("Program complete!");
+        }
+
+        static void Tests(string path, int testsDozensCount)
+        {
+            Console.WriteLine($"Test started.\nFile: {path}\nCount of tests: {testsDozensCount * 10}\nStatus:");
+            string text = "";
+            if (!Read(path, ref text))
+                return;
+
+            TimeSpan oneThreadTime = TimeSpan.Zero;
+            int maxThreadsCount = 20;
+            TimeSpan[] multyThreadTime = new TimeSpan[maxThreadsCount];
+            for (int i = 0; i < maxThreadsCount; i++)
+                multyThreadTime[i] = TimeSpan.Zero;
+            MethodInfo mi = typeof(Counter).GetMethod("Parse", BindingFlags.Static | BindingFlags.NonPublic);
+
+            Stopwatch stopwatch = new Stopwatch();
+
+            for (int i = 0; i < 10; i++)
+            {
+                Console.WriteLine($"{i * 10}%");
+                for (int j = 0; j < testsDozensCount; j++)
+                {
+                    stopwatch.Start();
+                    mi.Invoke(null, new object[] { text });
+                    stopwatch.Stop();
+                    oneThreadTime += stopwatch.Elapsed;
+                    stopwatch.Reset();
+
+                    for (int k = 0; k < multyThreadTime.Length; k++)
+                    {
+                        stopwatch.Start();
+                        Counter.AsyncParse(text, k + 1);
+                        stopwatch.Stop();
+                        multyThreadTime[k] += stopwatch.Elapsed;
+                        stopwatch.Reset();
+                    }
+                }
+            }
+            Console.WriteLine("100%");
+            
+            Console.WriteLine($"Обработка стандартного метода заняла {oneThreadTime.TotalMilliseconds / testsDozensCount / 10} миллисекунд.");
+            for (int i = 0; i < multyThreadTime.Length; i++)
+                Console.WriteLine($"Обработка {i+1}-поточного метода заняла {multyThreadTime[i].TotalMilliseconds / testsDozensCount / 10} миллисекунд.");
         }
 
         static bool Read(string path, ref string text)
