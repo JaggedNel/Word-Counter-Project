@@ -14,8 +14,8 @@ namespace WordCounter
         {
             Console.WriteLine("Program started!");
 
-            Count(@"D:\FullWarAndPeace.txt", true);
-            //Tests(@"D:\WarAndPeace.txt", 5);
+            //Count(@"D:\FullWarAndPeace.txt", true);
+            Tests(@"D:\WarAndPeace.txt", 5);
 
             Console.WriteLine("Program complete!");
         }
@@ -59,10 +59,17 @@ namespace WordCounter
                 return;
 
             TimeSpan oneThreadTime = TimeSpan.Zero;
+            TimeSpan minOneThreadTime = TimeSpan.MaxValue;
             int maxThreadsCount = 20;
-            TimeSpan[] multyThreadTime = new TimeSpan[maxThreadsCount];
+            TimeSpan[,] multyThreadTime = new TimeSpan[2,maxThreadsCount];
+            TimeSpan[,] minMultyThreadTime = new TimeSpan[2,maxThreadsCount];
             for (int i = 0; i < maxThreadsCount; i++)
-                multyThreadTime[i] = TimeSpan.Zero;
+            {
+                multyThreadTime[0,i] = TimeSpan.Zero;
+                minMultyThreadTime[0,i] = TimeSpan.MaxValue;
+                multyThreadTime[1, i] = TimeSpan.Zero;
+                minMultyThreadTime[1, i] = TimeSpan.MaxValue;
+            }
             MethodInfo mi = typeof(Counter).GetMethod("Parse", BindingFlags.Static | BindingFlags.NonPublic);
 
             Stopwatch stopwatch = new Stopwatch();
@@ -76,14 +83,26 @@ namespace WordCounter
                     mi.Invoke(null, new object[] { text });
                     stopwatch.Stop();
                     oneThreadTime += stopwatch.Elapsed;
+                    if (minOneThreadTime > stopwatch.Elapsed)
+                        minOneThreadTime = stopwatch.Elapsed;
                     stopwatch.Reset();
 
-                    for (int k = 0; k < multyThreadTime.Length; k++)
+                    for (int k = 0; k < maxThreadsCount; k++)
                     {
                         stopwatch.Start();
                         Counter.AsyncParse(text, k + 1);
                         stopwatch.Stop();
-                        multyThreadTime[k] += stopwatch.Elapsed;
+                        multyThreadTime[0,k] += stopwatch.Elapsed;
+                        if (minMultyThreadTime[0,k] > stopwatch.Elapsed)
+                            minMultyThreadTime[0,k] = stopwatch.Elapsed;
+                        stopwatch.Reset();
+
+                        stopwatch.Start();
+                        Counter.ConcurentParse(text, k + 1);
+                        stopwatch.Stop();
+                        multyThreadTime[1,k] += stopwatch.Elapsed;
+                        if (minMultyThreadTime[1,k] > stopwatch.Elapsed)
+                            minMultyThreadTime[1,k] = stopwatch.Elapsed;
                         stopwatch.Reset();
                     }
                 }
@@ -91,8 +110,9 @@ namespace WordCounter
             Console.WriteLine("100%");
             
             Console.WriteLine($"Обработка стандартного метода заняла {oneThreadTime.TotalMilliseconds / testsDozensCount / 10} миллисекунд.");
-            for (int i = 0; i < multyThreadTime.Length; i++)
-                Console.WriteLine($"Обработка {i+1}-поточного метода заняла {multyThreadTime[i].TotalMilliseconds / testsDozensCount / 10} миллисекунд.");
+            Console.WriteLine($"Threads| Time | Min  | Time | Min ");
+            for (int i = 0; i < maxThreadsCount; i++)
+                Console.WriteLine($"{i+1,7}|{multyThreadTime[0,i].TotalMilliseconds / testsDozensCount / 10,6:F2}|{minMultyThreadTime[0,i].TotalMilliseconds,6:F2}|{multyThreadTime[1, i].TotalMilliseconds / testsDozensCount / 10,6:F2}|{minMultyThreadTime[1, i].TotalMilliseconds,6:F2}");
         }
 
         static bool Read(string path, ref string text)
