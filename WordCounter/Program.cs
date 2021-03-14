@@ -1,4 +1,6 @@
-﻿using System;
+﻿#define USE_SERVICE
+
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Linq;
@@ -14,13 +16,28 @@ namespace WordCounter
         {
             Console.WriteLine("Program started!");
 
-            //Count(@"D:\FullWarAndPeace.txt", true);
-            Tests(@"D:\WarAndPeace.txt", 5);
+            //TestService();
+            Count(@"D:\FullWarAndPeace.txt", true);
+            //Tests(@"D:\WarAndPeace.txt", 5);
 
             Console.WriteLine("Program complete!");
         }
+        
+        static void TestService()
+        {
+            ServiceReference1.CompositeType ret;
+            using (var client = new ServiceReference1.Service1Client())
+            {
+                ret = client.GetDataUsingDataContract(new ServiceReference1.CompositeType
+                {
+                    BoolValue = true,
+                    StringValue = "True"
+                });
+            }
+            Console.WriteLine($"{ret.StringValue} {ret.BoolValue}");
+        }
 
-        static void Count(string path, bool async = false)
+        static void Count(string path, bool async = true)
         {
             string text = "";
             if (!Read(path, ref text))
@@ -28,10 +45,21 @@ namespace WordCounter
             Dictionary<string, int> words;
             Stopwatch stopwatch = new Stopwatch();
 
+#if USE_SERVICE
+            using (var client = new ServiceReference1.Service1Client())
+            {
+                stopwatch.Start();
+                var res = client.CountWords(text);
+                stopwatch.Stop();
+                if (res.ErrorMes != null)
+                    throw new Exception(res.ErrorMes);
+                words = res.Value;
+            }
+#else
             if (async)
             {
                 stopwatch.Start();
-                words = Counter.AsyncParse(text, 3);
+                words = Counter.ConcurentParse(text,  Environment.ProcessorCount);
                 stopwatch.Stop();
             }
             else
@@ -41,6 +69,7 @@ namespace WordCounter
                 words = (Dictionary<string, int>)mi.Invoke(null, new object[] { text });
                 stopwatch.Stop();
             }
+#endif
 
             Console.WriteLine($"Elapsed execution method time: {stopwatch.Elapsed.TotalMilliseconds} milliseconds.");
             StringBuilder result = new StringBuilder();

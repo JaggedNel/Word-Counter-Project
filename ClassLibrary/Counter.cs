@@ -108,28 +108,38 @@ namespace ClassLibrary
 
         public static Dictionary<string, int> ConcurentParse(string text, int threadsCount)
         {
-            var words = new ConcurrentDictionary<string, int>(threadsCount, 64);
-            int[] borders = new int[threadsCount + 1];
-            borders[0] = -1;
-            for (int i = 1; i < threadsCount; i++)
+            if (text.Length > 200)
             {
-                int n = borders[i - 1] + text.Length / threadsCount + 1;
-                while (!char.IsLetter(text[n]))
-                    n++;
-                borders[i] = n;
-            }
-            borders[threadsCount] = text.Length;
+                var words = new ConcurrentDictionary<string, int>(threadsCount, 64);
+                int[] borders = new int[threadsCount + 1];
+                borders[0] = -1;
+                for (int i = 1; i < threadsCount; i++)
+                {
+                    int n = borders[i - 1] + text.Length / threadsCount + 1;
+                    while (!char.IsLetter(text[n]))
+                        n++;
+                    borders[i] = n;
+                }
+                borders[threadsCount] = text.Length;
 
-            ConcurentWorker[] workers = new ConcurentWorker[threadsCount];
-            Action[] actions = new Action[threadsCount];
-            for (int i = 0; i < threadsCount; i++)
+                ConcurentWorker[] workers = new ConcurentWorker[threadsCount];
+                Action[] actions = new Action[threadsCount];
+                for (int i = 0; i < threadsCount; i++)
+                {
+                    workers[i] = new ConcurentWorker(borders[i], borders[i + 1], text, words);
+                    actions[i] = workers[i].Parse;
+                }
+                Parallel.Invoke(actions);
+
+                return new  Dictionary<string, int>(words);
+            }
+            else
             {
-                workers[i] = new ConcurentWorker(borders[i], borders[i + 1], text, words);
-                actions[i] = workers[i].Parse;
+                var words = new ConcurrentDictionary<string, int>();
+                ConcurentWorker worker = new ConcurentWorker(-1, text.Length, text, words);
+                worker.Parse();
+                return new Dictionary<string, int>(words);
             }
-            Parallel.Invoke(actions);
-
-            return new Dictionary<string, int>(words);
         }
 
         class ConcurentWorker
